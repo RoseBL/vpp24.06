@@ -58,7 +58,7 @@ format_vlib_node_graph (u8 * s, va_list * va)
   if (!n)
     return format (s, "%=26s%=26s%=26s", "Name", "Next", "Previous");
 
-  s = format (s, "%-26v", n->name);
+  s = format (s, "%-26v index = %d", n->name,n->index);
 
   indent = format_get_indent (s);
 

@@ -26,6 +26,8 @@
 /build/external/downloads/
 /path_setup
 /tools/
+/classify
+/src/plugins/ping_bk
 # start autotools ignore
 autom4te.cache/
 config/

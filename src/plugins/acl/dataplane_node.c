@@ -179,6 +179,24 @@ prefetch_session_entry (acl_main_t * am, fa_full_session_id_t f_sess_id)
   CLIB_PREFETCH (sess, sizeof (*sess), STORE);
 }
 
+/**
+ * @brief Process an established session
+ *
+ * 此内联函数用于处理已建立的会话，包括跟踪会话状态、重启定时器（如果需要）、更新计数器以及处理潜在的会话与数据包接口索引之间的冲突。
+ *
+ * @param vm 指向VLIB主控结构的指针
+ * @param am 指向ACL主控结构的指针
+ * @param counter_node_index 计数器节点索引
+ * @param is_input 是否为入站数据包的标志
+ * @param now 当前时间戳
+ * @param f_sess_id 完整会话标识符
+ * @param sw_if_index 接口索引数组，通常只有一个元素
+ * @param fa_5tuple 指向FA五元组结构的指针
+ * @param pkt_len 数据包长度
+ * @param node_trace_on 是否启用节点跟踪的标志
+ * @param trace_bitmap 跟踪位图指针
+ * @return 返回处理动作，通常为0或非零值
+ */
 always_inline u8
 process_established_session (vlib_main_t * vm, acl_main_t * am,
 			     u32 counter_node_index, int is_input, u64 now,
@@ -230,6 +248,21 @@ process_established_session (vlib_main_t * vm, acl_main_t * am,
 #define ACL_PLUGIN_VECTOR_SIZE 4
 #define ACL_PLUGIN_PREFETCH_GAP 3
 
+/**
+ * @brief VPP ACL Fast-Action Node Common Prepare Function
+ *
+ * 此函数是VPP中的ACL Fast-Action节点的通用准备函数，用于提取数据包信息，填充软件接口索引、五元组和会话哈希等数据结构。
+ *
+ * @param vm 指向VPP主控结构的指针
+ * @param node 指向VPP节点运行时结构的指针
+ * @param frame 指向VPP帧结构的指针
+ * @param is_ip6 是否为IPv6数据包的标志
+ * @param is_input 是否为入站数据包的标志
+ * @param is_l2_path 是否为二层路径的标志
+ * @param with_stateful_datapath 是否执行有状态数据平面的标志
+ *
+ * @note 函数中省略了trace和reclassify_sessions参数的注释，因为它们未在函数签名中出现。
+ */
 always_inline void
 acl_fa_node_common_prepare_fn (vlib_main_t * vm,
 			       vlib_node_runtime_t * node,
@@ -250,10 +283,12 @@ acl_fa_node_common_prepare_fn (vlib_main_t * vm,
 
 
 
+  // 获取帧的缓冲区指针
   from = vlib_frame_vector_args (frame);
   vlib_get_buffers (vm, from, pw->bufs, frame->n_vectors);
 
   /* set the initial values for the current buffer the next pointers */
+  // 初始化数据包相关指针
   b = pw->bufs;
   sw_if_index = pw->sw_if_indices;
   fa_5tuple = pw->fa_5tuples;
@@ -268,9 +303,11 @@ acl_fa_node_common_prepare_fn (vlib_main_t * vm,
    * in front. Then with a simple single loop.
    */
 
+  // 填充软件接口索引、五元组和会话哈希
   n_left = frame->n_vectors;
   while (n_left >= (ACL_PLUGIN_PREFETCH_GAP + 1) * ACL_PLUGIN_VECTOR_SIZE)
     {
+      // 预取数据包数据以优化性能
       const int vec_sz = ACL_PLUGIN_VECTOR_SIZE;
       {
 	int ii;
@@ -283,34 +320,45 @@ acl_fa_node_common_prepare_fn (vlib_main_t * vm,
       }
 
 
+      // 获取软件接口索引
       get_sw_if_index_xN (vec_sz, is_input, b, sw_if_index);
+      // 填充五元组信息
       fill_5tuple_xN (vec_sz, am, is_ip6, is_input, is_l2_path, &b[0],
 		      &sw_if_index[0], &fa_5tuple[0]);
+      // 如果执行有状态数据平面，则生成会话哈希
       if (with_stateful_datapath)
 	make_session_hash_xN (vec_sz, am, is_ip6, &sw_if_index[0],
 			      &fa_5tuple[0], &hash[0]);
 
+      // 更新剩余向量数量
       n_left -= vec_sz;
 
+      // 更新指针
       fa_5tuple += vec_sz;
       b += vec_sz;
       sw_if_index += vec_sz;
       hash += vec_sz;
     }
 
+  // 处理剩余不足一个向量大小的数据包
   while (n_left > 0)
     {
       const int vec_sz = 1;
 
+      // 获取软件接口索引
       get_sw_if_index_xN (vec_sz, is_input, b, sw_if_index);
+      // 填充五元组信息
       fill_5tuple_xN (vec_sz, am, is_ip6, is_input, is_l2_path, &b[0],
 		      &sw_if_index[0], &fa_5tuple[0]);
+      // 如果执行有状态数据平面，则生成会话哈希
       if (with_stateful_datapath)
 	make_session_hash_xN (vec_sz, am, is_ip6, &sw_if_index[0],
 			      &fa_5tuple[0], &hash[0]);
 
+      // 更新剩余向量数量
       n_left -= vec_sz;
 
+      // 更新指针
       fa_5tuple += vec_sz;
       b += vec_sz;
       sw_if_index += vec_sz;
@@ -601,6 +649,21 @@ acl_fa_inner_node_fn (vlib_main_t * vm,
   return frame->n_vectors;
 }
 
+/**
+ * @brief VPP ACL Fast-Action Outer Node Function
+ *
+ * 此函数是VPP中的ACL Fast-Action节点的外层处理函数，用于准备数据包处理环境，并根据是否需要重新分类和追踪标志决定调用哪个内部处理函数。
+ *
+ * @param vm 指向VPP主控结构的指针
+ * @param node 指向VPP节点运行时结构的指针
+ * @param frame 指向VPP帧结构的指针
+ * @param is_ip6 是否为IPv6数据包的标志
+ * @param is_input 是否为入站数据包的标志
+ * @param is_l2_path 是否为二层路径的标志
+ * @param do_stateful_datapath 是否执行有状态数据平面的标志
+ *
+ * @return 返回处理后的帧中的向量数量
+ */
 always_inline uword
 acl_fa_outer_node_fn (vlib_main_t * vm,
 		      vlib_node_runtime_t * node, vlib_frame_t * frame,
@@ -609,44 +672,67 @@ acl_fa_outer_node_fn (vlib_main_t * vm,
 {
   acl_main_t *am = &acl_main;
 
+  // 执行通用的节点准备操作
   acl_fa_node_common_prepare_fn (vm, node, frame, is_ip6, is_input,
 				 is_l2_path, do_stateful_datapath);
 
+  // 根据是否需要重新分类，选择调用的内部处理函数
   if (am->reclassify_sessions)
     {
+      // 如果设置了追踪标志，调用带有追踪的内部处理函数
       if (PREDICT_FALSE (node->flags & VLIB_NODE_FLAG_TRACE))
 	return acl_fa_inner_node_fn (vm, node, frame, is_ip6, is_input,
 				     is_l2_path, do_stateful_datapath,
 				     1 /* trace */ ,
 				     1 /* reclassify */ );
       else
+      // 否则，调用不带有追踪的内部处理函数
 	return acl_fa_inner_node_fn (vm, node, frame, is_ip6, is_input,
 				     is_l2_path, do_stateful_datapath, 0,
 				     1 /* reclassify */ );
     }
   else
     {
+      // 如果设置了追踪标志，调用带有追踪的内部处理函数，但不重新分类
       if (PREDICT_FALSE (node->flags & VLIB_NODE_FLAG_TRACE))
 	return acl_fa_inner_node_fn (vm, node, frame, is_ip6, is_input,
 				     is_l2_path, do_stateful_datapath,
 				     1 /* trace */ ,
 				     0);
       else
+      // 否则，调用不带有追踪的内部处理函数，也不重新分类
 	return acl_fa_inner_node_fn (vm, node, frame, is_ip6, is_input,
 				     is_l2_path, do_stateful_datapath, 0, 0);
     }
 }
 
+/**
+ * @brief VPP ACL Fast-Action Node Function
+ *
+ * 此函数是VPP中的ACL Fast-Action节点的核心处理函数，用于决定是否重新分类数据包，并执行相应的数据平面操作。
+ *
+ * @param vm 指向VPP主控结构的指针
+ * @param node 指向VPP节点运行时结构的指针
+ * @param frame 指向VPP帧结构的指针
+ * @param is_ip6 是否为IPv6数据包的标志
+ * @param is_input 是否为入站数据包的标志
+ * @param is_l2_path 是否为二层路径的标志
+ *
+ * @return 返回处理后的帧中的向量数量
+ */
 always_inline uword
 acl_fa_node_fn (vlib_main_t * vm,
 		vlib_node_runtime_t * node, vlib_frame_t * frame, int is_ip6,
 		int is_input, int is_l2_path)
 {
   /* select the reclassify/no-reclassify version of the datapath */
+  // 获取ACL主控结构的指针
   acl_main_t *am = &acl_main;
+   // 获取当前线程的ACL Fast-Action私有数据
   acl_fa_per_worker_data_t *pw = &am->per_worker_data[vm->thread_index];
   uword rv;
 
+  // 根据会话哈希是否初始化选择重新分类/不重新分类的版本的数据平面处理函数
   if (am->fa_sessions_hash_is_initialized)
     rv = acl_fa_outer_node_fn (vm, node, frame, is_ip6, is_input,
 			       is_l2_path, 1);
@@ -654,8 +740,10 @@ acl_fa_node_fn (vlib_main_t * vm,
     rv = acl_fa_outer_node_fn (vm, node, frame, is_ip6, is_input,
 			       is_l2_path, 0);
 
+   // 将缓冲区队列化到下一节点
   vlib_buffer_enqueue_to_next (vm, node, vlib_frame_vector_args (frame),
 			       pw->nexts, frame->n_vectors);
+  // 返回处理后的帧中的向量数量
   return rv;
 }
 

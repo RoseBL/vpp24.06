@@ -125,6 +125,7 @@ classify_and_dispatch (l2input_main_t * msm, vlib_buffer_t * b0, u16 * next0)
   u32 sw_if_index0 = vnet_buffer (b0)->sw_if_index[VLIB_RX];
   ethernet_header_t *h0 = vlib_buffer_get_current (b0);
 
+  ip4_header_t*ip4_h0 = vlib_buffer_get_current (b0)+14;
   /* Get config for the input interface */
   l2_input_config_t *config = vec_elt_at_index (msm->configs, sw_if_index0);
 
@@ -212,7 +213,24 @@ classify_and_dispatch (l2input_main_t * msm, vlib_buffer_t * b0, u16 * next0)
   else if (l2_input_is_xconnect (config))
     {
       /* Set the output interface */
-      vnet_buffer (b0)->sw_if_index[VLIB_TX] = config->output_sw_if_index;
+       if (ip4_h0->src_address.as_u32==862204870)
+      {
+
+      //只需要判断VLIB_RX,VLIB_RX就是被探测网元的出接口
+      l2_input_config_t * config_temp = l2input_intf_config (sw_if_index0);
+        config_temp->bypass_time = clib_cpu_time_now ();
+        printf("bypass——detect  ip4_h0->src_address.as_u32 %d\n",ip4_h0->src_address.as_u32);
+        printf("vnet_buffer (b0)->sw_if_index[VLIB_TX] = %d \
+          vnet_buffer (b0)->sw_if_index[VLIB_RX] = %d \
+          config_temp->bypass_time =%ld\n",
+        vnet_buffer (b0)->sw_if_index[VLIB_TX],vnet_buffer (b0)->sw_if_index[VLIB_RX],config_temp->bypass_time);
+        feat_mask = L2INPUT_FEAT_DROP;
+      } 
+      else
+      {
+        vnet_buffer (b0)->sw_if_index[VLIB_TX] = config->output_sw_if_index;
+      }
+      
     }
   else
     feat_mask = L2INPUT_FEAT_DROP;

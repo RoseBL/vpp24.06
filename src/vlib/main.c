@@ -161,7 +161,30 @@ vlib_validate_frame_indices (vlib_frame_t * f)
 	}
     }
 }
+/**
+ * @file vlib_put_frame_to_node.c
+ * @brief 将帧放入目标节点的操作
+ */
 
+/**
+ * @brief 将帧放入目标节点
+ *
+ * 该函数负责将一个数据包帧放入VLIB处理管道中指定的目标节点中。如果帧中没有向量，则不会进行任何操作。
+ *
+ * @param vm VLIB主结构的指针
+ * @param to_node_index 目标节点的索引
+ * @param f 要放入的帧的指针
+ *
+ * 该函数执行以下步骤：
+ * 1. 检查帧中是否有向量，如果没有则返回。
+ * 2. 验证VLIB主结构。
+ * 3. 验证帧的索引。
+ * 4. 获取目标节点的信息。
+ * 5. 将帧添加到待处理帧列表中。
+ * 6. 更新帧和待处理帧的标志和索引。
+ *
+ * @note 该函数确保只有在帧中有向量的情况下才会进行操作，并更新待处理帧的状态。
+ */
 void
 vlib_put_frame_to_node (vlib_main_t * vm, u32 to_node_index, vlib_frame_t * f)
 {
@@ -332,6 +355,32 @@ validate_frame_magic (vlib_main_t * vm,
   ASSERT (VLIB_FRAME_MAGIC == magic[0]);
 }
 
+/**
+ * @file vlib_get_next_frame_internal.c
+ * @brief 管理和获取节点的下一帧操作
+ */
+
+/**
+ * @brief 获取节点的下一帧
+ *
+ * 该函数负责管理和获取VLIB处理管道中给定节点的下一帧，并确保帧的正确分配和状态。
+ *
+ * @param vm VLIB主结构的指针
+ * @param node 节点的运行时信息的指针
+ * @param next_index 指示节点中下一个处理步骤的索引
+ * @param allocate_new_next_frame 标志指示是否需要分配新的下一帧
+ * @return 指向获取的帧的指针
+ *
+ * 该函数执行以下步骤：
+ * 1. 获取下一帧的信息。
+ * 2. 确保该下一帧拥有将数据包排队到目标帧的权限。
+ * 3. 分配新帧（如果需要）。
+ * 4. 处理和重置已完成调度的帧。
+ * 5. 分配新的帧（如果当前帧已满或需要新帧）。
+ * 6. 验证帧的元数据（调试模式下）。
+ *
+ * @note 该函数确保每个帧的正确性和完整性，并处理帧的重用和分配。
+ */
 vlib_frame_t *
 vlib_get_next_frame_internal (vlib_main_t * vm,
 			      vlib_node_runtime_t * node,
@@ -344,10 +393,12 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
   nf = vlib_node_runtime_get_next_frame (vm, node, next_index);
 
   /* Make sure this next frame owns right to enqueue to destination frame. */
+  /* 确保此下一帧拥有排队到目标帧的权限。 */
   if (PREDICT_FALSE (!(nf->flags & VLIB_FRAME_OWNER)))
     vlib_next_frame_change_ownership (vm, node, next_index);
 
   /* ??? Don't need valid flag: can use frame_index == ~0 */
+  /* 不需要有效标志：可以使用 frame_index == ~0 */
   if (PREDICT_FALSE (!(nf->flags & VLIB_FRAME_IS_ALLOCATED)))
     {
       nf->frame = vlib_frame_alloc (vm, node, next_index);
@@ -358,6 +409,7 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
 
   /* Has frame been removed from pending vector (e.g. finished dispatching)?
      If so we can reuse frame. */
+  /* 如果帧已从待处理向量中移除（例如，调度完成），则可以重用帧。 */
   if ((nf->flags & VLIB_FRAME_PENDING)
       && !(f->frame_flags & VLIB_FRAME_PENDING))
     {
@@ -368,12 +420,14 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
 
   /* Allocate new frame if current one is marked as no-append or
      it is already full. */
+     /* 如果当前帧已满或需要新帧，则分配新帧。 */
   n_used = f->n_vectors;
   if (n_used >= VLIB_FRAME_SIZE || (allocate_new_next_frame && n_used > 0) ||
       (f->frame_flags & VLIB_FRAME_NO_APPEND))
     {
       /* Old frame may need to be freed after dispatch, since we'll have
          two redundant frames from node -> next node. */
+        /* 旧帧在调度后可能需要释放，因为我们将有两个冗余帧从节点到下一节点。 */
       if (!(nf->flags & VLIB_FRAME_NO_FREE_AFTER_DISPATCH))
 	{
 	  vlib_frame_t *f_old = vlib_get_frame (vm, nf->frame);
@@ -381,11 +435,13 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
 	}
 
       /* Allocate new frame to replace full one. */
+      /* 分配新帧以替换已满的帧。 */
       f = nf->frame = vlib_frame_alloc (vm, node, next_index);
       n_used = f->n_vectors;
     }
 
   /* Should have free vectors in frame now. */
+  /* 现在帧中应该有可用的向量。 */
   ASSERT (n_used < VLIB_FRAME_SIZE);
 
   if (CLIB_DEBUG > 0)
@@ -397,6 +453,29 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
   return f;
 }
 
+/**
+ * @file vlib_put_next_frame_validate.c
+ * @brief 验证向量放入节点的下一帧的操作
+ */
+
+/**
+ * @brief 验证将向量放入下一帧的操作
+ *
+ * 该函数负责验证将数据包（或向量）放入VLIB处理管道中给定节点的下一帧的操作是否合法。
+ *
+ * @param vm VLIB主结构的指针
+ * @param rt 节点的运行时信息的指针
+ * @param next_index 指示节点中下一个处理步骤的索引
+ * @param n_vectors_left 剩余未处理的向量数量
+ *
+ * 该函数执行以下步骤：
+ * 1. 获取并验证下一帧的信息。
+ * 2. 验证帧的索引和向量数量。
+ * 3. 根据帧的验证结果进行进一步处理。
+ * 4. 如果下一节点需要验证帧，调用其验证函数。
+ *
+ * @note 该函数主要用于调试模式下，确保帧的元数据和向量操作的正确性。
+ */
 static void
 vlib_put_next_frame_validate (vlib_main_t * vm,
 			      vlib_node_runtime_t * rt,
@@ -436,6 +515,30 @@ vlib_put_next_frame_validate (vlib_main_t * vm,
     }
 }
 
+/**
+ * @file vlib_put_next_frame.c
+ * @brief 管理将数据包（向量）放入下一帧的操作
+ */
+
+/**
+ * @brief 将向量放入节点的下一帧中
+ *
+ * 该函数负责管理将数据包（或向量）放入VLIB处理管道中给定节点的下一帧中。
+ *
+ * @param vm VLIB主结构的指针
+ * @param r 节点的运行时信息的指针
+ * @param next_index 指示节点中下一个处理步骤的索引
+ * @param n_vectors_left 剩余未处理的向量数量
+ *
+ * 该函数执行以下步骤：
+ * 1. 在调试模式下验证操作。
+ * 2. 获取下一帧的信息。
+ * 3. 管理帧的元数据和向量数量。
+ * 4. 更新帧状态和待处理帧的管理。
+ * 5. 处理向量溢出情况并更新统计信息。
+ *
+ * @note 调试模式下，该函数会进行额外的元数据验证。
+ */
 void
 vlib_put_next_frame (vlib_main_t * vm,
 		     vlib_node_runtime_t * r,

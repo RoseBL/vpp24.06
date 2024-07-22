@@ -73,6 +73,7 @@ typedef union {
            after padding so we can still
            use them as (shorter) key together with
            L4 info */
+        //对齐的填充数组
         u32 l3_zero_pad[6];
         ip4_address_t ip4_addr[2];
       };

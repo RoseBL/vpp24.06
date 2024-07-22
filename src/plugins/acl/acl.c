@@ -314,6 +314,17 @@ acl_api_invalid_prefix (const vl_api_prefix_t * prefix)
   return (!valid_af) || ip_prefix_decode2 (prefix, &ip_prefix);
 }
 
+/**
+ * @brief Add or replace an Access Control List
+ *
+ * 此函数用于添加或替换一个ACL列表。它首先验证输入参数的有效性，然后根据提供的索引决定是创建一个新的ACL还是替换现有的ACL。接着，它创建并填充ACL规则，最后更新ACL的标签和其他相关信息。
+ *
+ * @param count 规则的数量
+ * @param rules 规则数组
+ * @param acl_list_index 指向u32类型的指针，用于存储或更新ACL列表的索引
+ * @param tag 指向u8类型的指针，用于存储ACL的标签
+ * @return 返回操作结果，0表示成功，非0表示错误
+ */
 static int
 acl_add_list (u32 count, vl_api_acl_rule_t rules[],
 	      u32 * acl_list_index, u8 * tag)
@@ -370,6 +381,7 @@ acl_add_list (u32 count, vl_api_acl_rule_t rules[],
     }
 
   /* Create and populate the rules */
+  //创建一个规则数组，填充每个规则的详细信息，包括许可状态、IP版本、源/目标地址、端口范围等。
   if (count > 0)
     vec_validate (acl_new_rules, count - 1);
 
@@ -407,6 +419,7 @@ acl_add_list (u32 count, vl_api_acl_rule_t rules[],
       if (a->rules)
 	vec_free (a->rules);
     }
+  //将新创建的规则数组赋值给ACL的rules字段，更新ACL的标签
   a->rules = acl_new_rules;
   memcpy (a->tag, tag, tag_len + 1);
   if (am->trace_acl > 255)

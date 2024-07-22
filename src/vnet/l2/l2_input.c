@@ -442,6 +442,8 @@ set_int_l2_mode (vlib_main_t * vm, vnet_main_t * vnet_main,	/*           */
 	  config->output_sw_if_index = xc_sw_if_index;
 
 	  /* Make sure last-chance drop is configured */
+    //FIXME:  lbinxx code 2024-07-02 config->feature_bitmap 需要重置为0;
+    config->feature_bitmap = 0;
 	  config->feature_bitmap |= L2INPUT_FEAT_DROP;
 
 	  /* Make sure bridging features are disabled */

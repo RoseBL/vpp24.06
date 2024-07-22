@@ -102,18 +102,22 @@ acl_fa_verify_init_sessions (acl_main_t * am)
 	}
 
       /* ... and the interface session hash table */
+	  //初始化bihash，并分配一个独占的内存heap给它
       clib_bihash_init_40_8 (&am->fa_ip6_sessions_hash,
 			     "ACL plugin FA IPv6 session bihash",
 			     am->fa_conn_table_hash_num_buckets,
 			     am->fa_conn_table_hash_memory_size);
+	  //初始化bihash，并分配一个独占的内存heap给它
       clib_bihash_set_kvp_format_fn_40_8 (&am->fa_ip6_sessions_hash,
 					  format_ip6_session_bihash_kv);
 
-      clib_bihash_init_16_8 (&am->fa_ip4_sessions_hash,
+      //初始化bihash，并分配一个独占的内存heap给它
+	  clib_bihash_init_16_8 (&am->fa_ip4_sessions_hash,
 			     "ACL plugin FA IPv4 session bihash",
 			     am->fa_conn_table_hash_num_buckets,
 			     am->fa_conn_table_hash_memory_size);
-      clib_bihash_set_kvp_format_fn_16_8 (&am->fa_ip4_sessions_hash,
+      //初始化bihash，并分配一个独占的内存heap给它
+	  clib_bihash_set_kvp_format_fn_16_8 (&am->fa_ip4_sessions_hash,
 					  format_ip4_session_bihash_kv);
 
       am->fa_sessions_hash_is_initialized = 1;

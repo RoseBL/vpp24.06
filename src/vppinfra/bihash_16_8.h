@@ -57,6 +57,14 @@ clib_bihash_is_free_16_8 (clib_bihash_kv_16_8_t * v)
   return 0;
 }
 
+/**
+ * @brief Calculate hash value for a 16-bit key bi-hash table entry
+ *
+ * 此函数用于计算16位键的双向哈希表条目的哈希值。它依赖于编译器是否支持CRC32C内在函数（intrinsics）来选择使用CRC32C或XXHash算法。
+ *
+ * @param v 指向clib_bihash_kv_16_8_t类型的键值对结构的指针
+ * @return 返回计算得到的哈希值
+ */
 static inline u64
 clib_bihash_hash_16_8 (clib_bihash_kv_16_8_t * v)
 {

@@ -54,31 +54,40 @@ typedef struct {
 
 typedef struct {
   /* original non-compiled ACL */
+  // 原始未编译的ACL的索引
   u32 acl_index;
+  // ACL条目（ACE）的索引
   u32 ace_index;
   /* the index of the hash_ace_info_t */
+  // 相关的hash_ace_info_t结构的索引，用于存储与哈希相关的信息
   u32 hash_ace_info_index;
   /* applied mask type index */
+  // 应用的掩码类型索引，用于确定如何对五元组进行掩码操作
   u32 mask_type_index;
   /*
    * index of applied entry, which owns the colliding_rules vector
    */
+  // 碰撞头条目的索引，拥有碰撞规则向量
   u32 collision_head_ae_index;
   /*
    * Collision rule vector for matching - set only on head entry
    */
+  // 碰撞规则向量，仅在头条目中设置，用于处理哈希碰撞
   collision_match_rule_t *colliding_rules;
   /*
    * number of hits on this entry
    */
+  // 这个条目被命中的次数
   u64 hitcount;
   /*
    * acl position in vector of ACLs within lookup context
    */
+  // 在特定查找上下文中ACL向量中的位置
   u32 acl_position;
   /*
    * Action of this applied ACE
    */
+  // 应用的ACE的动作
   u8 action;
 } applied_hash_ace_entry_t;
 

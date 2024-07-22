@@ -509,6 +509,17 @@ static inline void BV (clib_bihash_prefetch_data)
 		 LOAD);
 }
 
+/**
+ * @brief Perform an inline search in a bi-hash table with a hash value
+ *
+ * 此内联函数用于在双向哈希表中基于给定的哈希值和键值对进行搜索。它适用于已经初始化的哈希表，并能够处理锁竞争和线性搜索的情况。
+ *
+ * @param h 指向双向哈希表结构的指针
+ * @param hash 哈希值
+ * @param search_key 指向用于搜索的键值对结构的指针
+ * @param valuep 指向用于存储结果值的键值对结构的指针
+ * @return 返回查找结果，零表示找到，非零表示未找到
+ */
 static inline int BV (clib_bihash_search_inline_2_with_hash)
   (BVT (clib_bihash) * h,
    u64 hash, BVT (clib_bihash_kv) * search_key, BVT (clib_bihash_kv) * valuep)
@@ -532,6 +543,7 @@ static inline int BV (clib_bihash_search_inline_2_with_hash)
     return -1;
 #endif
 
+  //基于哈希值获取对应的桶。
   b = BV (clib_bihash_get_bucket) (h, hash);
 
   if (PREDICT_FALSE (BV (clib_bihash_bucket_is_empty) (b)))
@@ -547,6 +559,7 @@ static inline int BV (clib_bihash_search_inline_2_with_hash)
   v = BV (clib_bihash_get_value) (h, b->offset);
 
   /* If the bucket has unresolvable collisions, use linear search */
+  //如果桶中有无法解决的冲突，将使用线性搜索。根据桶的linear_search和log2_pages字段调整搜索范围。
   limit = BIHASH_KVP_PER_PAGE;
 
   if (PREDICT_FALSE (b->as_u64 & mask.as_u64))
@@ -559,6 +572,8 @@ static inline int BV (clib_bihash_search_inline_2_with_hash)
 
   for (i = 0; i < limit; i++)
     {
+      // 遍历桶内的键值对，使用BV (clib_bihash_key_compare)函数比较键值对的键和搜索键。
+      // 如果找到匹配项且不是空闲状态，将结果复制到valuep指向的位置并返回零。
       if (BV (clib_bihash_key_compare) (v->kvp[i].key, search_key->key))
 	{
 	  rv = v->kvp[i];

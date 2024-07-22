@@ -153,7 +153,7 @@ clear_cli_process_id_by_icmp_id_mt (vlib_main_t *vm, u16 icmp_id)
 }
 clib_error_t *ping_plugin_api_hookup (vlib_main_t *vm);
 send_ip46_ping_result_t send_ip4_ping (vlib_main_t *vm, u32 table_id,
-				       ip4_address_t *pa4, u32 sw_if_index,
+				       ip4_address_t *pa4, u32 sw_if_index,u32 dst_sw_if_index,
 				       u16 seq_host, u16 id_host, u16 data_len,
 				       u32 burst, u8 verbose);
 send_ip46_ping_result_t send_ip6_ping (vlib_main_t *vm, u32 table_id,

@@ -26,6 +26,8 @@
 #include <vpp/app/version.h>
 
 #include <vnet/ip/icmp4.h>
+#include <vnet/l2/l2_output.h>
+#include <vnet/l2/l2_input.h>
 #include <ping/ping.h>
 
 ping_main_t ping_main;
@@ -780,50 +782,50 @@ init_icmp46_echo_request (vlib_main_t * vm, vlib_buffer_t * b0,
 }
 
 
-static u32
-ip46_fib_index_from_table_id (u32 table_id, int is_ip6)
-{
-  u32 fib_index = is_ip6 ?
-    ip6_fib_index_from_table_id (table_id) :
-    ip4_fib_index_from_table_id (table_id);
-  return fib_index;
-}
+// static u32
+// ip46_fib_index_from_table_id (u32 table_id, int is_ip6)
+// {
+//   u32 fib_index = is_ip6 ?
+//     ip6_fib_index_from_table_id (table_id) :
+//     ip4_fib_index_from_table_id (table_id);
+//   return fib_index;
+// }
 
-static fib_node_index_t
-ip46_fib_table_lookup_host (u32 fib_index, ip46_address_t * pa46, int is_ip6)
-{
-  fib_node_index_t fib_entry_index = is_ip6 ?
-    ip6_fib_table_lookup (fib_index, &pa46->ip6, 128) :
-    ip4_fib_table_lookup (ip4_fib_get (fib_index), &pa46->ip4, 32);
-  return fib_entry_index;
-}
+// static fib_node_index_t
+// ip46_fib_table_lookup_host (u32 fib_index, ip46_address_t * pa46, int is_ip6)
+// {
+//   fib_node_index_t fib_entry_index = is_ip6 ?
+//     ip6_fib_table_lookup (fib_index, &pa46->ip6, 128) :
+//     ip4_fib_table_lookup (ip4_fib_get (fib_index), &pa46->ip4, 32);
+//   return fib_entry_index;
+// }
 
-static u32
-ip46_get_resolving_interface (u32 fib_index, ip46_address_t * pa46,
-			      int is_ip6)
-{
-  u32 sw_if_index = ~0;
-  if (~0 != fib_index)
-    {
-      fib_node_index_t fib_entry_index;
-      fib_entry_index = ip46_fib_table_lookup_host (fib_index, pa46, is_ip6);
-      sw_if_index = fib_entry_get_resolving_interface (fib_entry_index);
-    }
-  return sw_if_index;
-}
+// static u32
+// ip46_get_resolving_interface (u32 fib_index, ip46_address_t * pa46,
+// 			      int is_ip6)
+// {
+//   u32 sw_if_index = ~0;
+//   if (~0 != fib_index)
+//     {
+//       fib_node_index_t fib_entry_index;
+//       fib_entry_index = ip46_fib_table_lookup_host (fib_index, pa46, is_ip6);
+//       sw_if_index = fib_entry_get_resolving_interface (fib_entry_index);
+//     }
+//   return sw_if_index;
+// }
 
-static u32
-ip46_fib_table_get_index_for_sw_if_index (u32 sw_if_index, int is_ip6,
-					  ip46_address_t *pa46)
-{
-  if (is_ip6)
-    {
-      if (ip6_address_is_link_local_unicast (&pa46->ip6))
-	return ip6_ll_fib_get (sw_if_index);
-      return ip6_fib_table_get_index_for_sw_if_index (sw_if_index);
-    }
-  return ip4_fib_table_get_index_for_sw_if_index (sw_if_index);
-}
+// static u32
+// ip46_fib_table_get_index_for_sw_if_index (u32 sw_if_index, int is_ip6,
+// 					  ip46_address_t *pa46)
+// {
+//   if (is_ip6)
+//     {
+//       if (ip6_address_is_link_local_unicast (&pa46->ip6))
+// 	return ip6_ll_fib_get (sw_if_index);
+//       return ip6_fib_table_get_index_for_sw_if_index (sw_if_index);
+//     }
+//   return ip4_fib_table_get_index_for_sw_if_index (sw_if_index);
+// }
 
 
 static int
@@ -1013,6 +1015,9 @@ ip46_enqueue_packet (vlib_main_t *vm, vlib_buffer_t *b0, u32 burst,
   int n_sent = 0;
 
   u16 n_to_send;
+  // u32 next0;
+  // vnet_hw_interface_t *hi0;
+  vnet_main_t *vnm = vnet_get_main ();
 
   /*
    * Enqueue the packet, possibly as one or more frames of copies to make
@@ -1020,6 +1025,13 @@ ip46_enqueue_packet (vlib_main_t *vm, vlib_buffer_t *b0, u32 burst,
    * for error in vlib_buffer_copy, so as to allow the caller to free it
    * in case we encounter the error in the middle of the loop.
    */
+  ethernet_header_t * eth_hdr0 = vlib_buffer_get_current (b0);
+  for(int i=0; i < b0->current_length; i++)
+  {
+    printf("%02x ", ((u8*)eth_hdr0)[i]);
+  }
+  printf("\n");
+
   for (n_to_send = at_most_a_frame (burst), burst -= n_to_send; n_to_send > 0;
        n_to_send = at_most_a_frame (burst), burst -= n_to_send)
     {
@@ -1054,7 +1066,22 @@ ip46_enqueue_packet (vlib_main_t *vm, vlib_buffer_t *b0, u32 burst,
 	  /* put the original buffer as the last one of an error-free run */
 	  *to_next++ = vlib_get_buffer_index (vm, b0);
 	}
-      vlib_put_frame_to_node (vm, lookup_node_index, f);
+  // //方法一：这个方法暂时不行
+    //   hi0 =
+	  //   vnet_get_sup_hw_interface (vnm,
+		// 		       vnet_buffer (b0)->sw_if_index
+		// 		       [VLIB_TX]);
+      
+	    
+
+	  // next0 = hi0->output_node_next_index;
+    // lookup_node_index = next0;
+
+  // //方法二：
+  vnet_put_frame_to_sw_interface (vnm, vnet_buffer (b0)->sw_if_index[VLIB_TX], f);
+
+  // //方法三：实测可以正常发包，但是发包端口模式必须为bridge。
+      // vlib_put_frame_to_node (vm, lookup_node_index, f);
       n_sent += f->n_vectors;
     }
   return n_sent;
@@ -1069,7 +1096,8 @@ ship_and_ret:
   ASSERT (n_to_send <= f->n_vectors);
   f->n_vectors -= n_to_send;
   n_sent += f->n_vectors;
-  vlib_put_frame_to_node (vm, lookup_node_index, f);
+  // vlib_put_frame_to_node (vm, lookup_node_index, f);
+  vnet_put_frame_to_sw_interface (vnm, vnet_buffer (b0)->sw_if_index[VLIB_TX], f);
   return n_sent;
 }
 
@@ -1084,7 +1112,7 @@ static send_ip46_ping_result_t
 send_ip46_ping (vlib_main_t * vm,
 		u32 table_id,
 		ip46_address_t * pa46,
-		u32 sw_if_index,
+		u32 sw_if_index, u32 dst_sw_if_index,
 		u16 seq_host, u16 id_host, u16 data_len, u32 burst,
 		u8 verbose, int is_ip6)
 {
@@ -1093,40 +1121,57 @@ send_ip46_ping (vlib_main_t * vm,
   int n_buf0 = 0;
   vlib_buffer_t *b0;
 
+  ethernet_header_t static_eth_header = {
+      {0x00, 0x11, 0x22, 0x33, 0x44, 0x55}, // 目的MAC地址
+      {0xA0, 0xB1, 0xC2, 0xD3, 0xE4, 0xF5}, // 源MAC地址
+      0x0008 // EtherType，例如IPv4
+  };
+
   n_buf0 = vlib_buffer_alloc (vm, &bi0, 1);
   if (n_buf0 < 1)
     ERROR_OUT (SEND_PING_ALLOC_FAIL);
 
   b0 = vlib_get_buffer (vm, bi0);
+  // ethernet_header_t * eth_hdr0 = vlib_buffer_get_current (b0);
+
+  // clib_memcpy_fast ((u8 *) eth_hdr0, &static_eth_header, sizeof (ethernet_header_t));
+
+  // int l3_header_offset = sizeof (ethernet_header_t);
+
+  // // eth_hdr0 = (ethernet_header_t*)((u8 *)eth_hdr0-sizeof(ethernet_header_t));
+  // // vlib_buffer_advance (b0, -sizeof (ethernet_header_t));
 
   /*
    * if the user did not provide a source interface,
    * perform a resolution and use an interface
    * via which it succeeds.
    */
-  u32 fib_index;
-  if (~0 == sw_if_index)
-    {
-      fib_index = ip46_fib_index_from_table_id (table_id, is_ip6);
-      sw_if_index = ip46_get_resolving_interface (fib_index, pa46, is_ip6);
-    }
-  else
-    fib_index =
-      ip46_fib_table_get_index_for_sw_if_index (sw_if_index, is_ip6, pa46);
+  // u32 fib_index;
+  // if (~0 == sw_if_index)
+  //   {
+  //     fib_index = ip46_fib_index_from_table_id (table_id, is_ip6);
+  //     sw_if_index = ip46_get_resolving_interface (fib_index, pa46, is_ip6);
+  //   }
+  // else
+  //   fib_index =
+  //     ip46_fib_table_get_index_for_sw_if_index (sw_if_index, is_ip6, pa46);
 
-  if (~0 == fib_index)
-    ERROR_OUT (SEND_PING_NO_TABLE);
-  if (~0 == sw_if_index)
-    ERROR_OUT (SEND_PING_NO_INTERFACE);
+  // if (~0 == fib_index)
+  //   ERROR_OUT (SEND_PING_NO_TABLE);
+  // if (~0 == sw_if_index)
+  //   ERROR_OUT (SEND_PING_NO_INTERFACE);
+
+  // vnet_buffer (b0)->sw_if_index[VLIB_RX] = sw_if_index;
+  // vnet_buffer (b0)->sw_if_index[VLIB_TX] = fib_index;
 
   vnet_buffer (b0)->sw_if_index[VLIB_RX] = sw_if_index;
-  vnet_buffer (b0)->sw_if_index[VLIB_TX] = fib_index;
+  vnet_buffer (b0)->sw_if_index[VLIB_TX] = dst_sw_if_index;
 
   int l4_header_offset = ip46_fill_l3_header (pa46, b0, is_ip6);
 
   /* set the src address in the buffer */
   if (!ip46_set_src_address (sw_if_index, b0, is_ip6))
-    ERROR_OUT (SEND_PING_NO_SRC_ADDRESS);
+  //   ERROR_OUT (SEND_PING_NO_SRC_ADDRESS);
   if (verbose)
     ip46_print_buffer_src_address (vm, b0, is_ip6);
 
@@ -1150,8 +1195,27 @@ send_ip46_ping (vlib_main_t * vm,
     }
   else
     {
-      node_index = ip4_lookup_node.index;
+      // node_index = ip4_lookup_node.index;
+      // node_index = ethernet_input_node.index;
+      node_index = l2output_node.index;
+      // node_index = device_input_node.index;
     }
+  int l2_header_offset = sizeof (ethernet_header_t);
+  vlib_buffer_advance (b0, -l2_header_offset);
+  ethernet_header_t * eth_hdr0 = vlib_buffer_get_current (b0);
+
+  clib_memcpy_fast ((u8 *) eth_hdr0, &static_eth_header, sizeof (ethernet_header_t));
+  eth_hdr0->type = clib_host_to_net_u16(ETHERNET_TYPE_IP4);
+
+
+  // eth_hdr0 = (ethernet_header_t*)((u8 *)eth_hdr0-sizeof(ethernet_header_t));
+  // printf("firsts\n");
+  // for(int i=0; i < b0->current_length; i++)
+  // {
+  //   printf("%02x ", ((u8*)eth_hdr0)[i]);
+  // }
+  // printf("\n");
+  
   int n_sent = ip46_enqueue_packet (vm, b0, burst, node_index);
   if (n_sent < burst)
     err = SEND_PING_NO_BUFFERS;
@@ -1172,64 +1236,64 @@ send_ip6_ping (vlib_main_t *vm, u32 table_id, ip6_address_t *pa6,
 {
   ip46_address_t target;
   target.ip6 = *pa6;
-  return send_ip46_ping (vm, table_id, &target, sw_if_index, seq_host,
+  return send_ip46_ping (vm, table_id, &target, sw_if_index, sw_if_index, seq_host,
 			 id_host, data_len, burst, verbose, 1 /* is_ip6 */ );
 }
 
 send_ip46_ping_result_t
 send_ip4_ping (vlib_main_t *vm, u32 table_id, ip4_address_t *pa4,
-	       u32 sw_if_index, u16 seq_host, u16 id_host, u16 data_len,
+	       u32 sw_if_index, u32 dst_sw_if_index, u16 seq_host, u16 id_host, u16 data_len,
 	       u32 burst, u8 verbose)
 {
   ip46_address_t target;
   ip46_address_set_ip4 (&target, pa4);
-  return send_ip46_ping (vm, table_id, &target, sw_if_index, seq_host,
+  return send_ip46_ping (vm, table_id, &target, sw_if_index, dst_sw_if_index, seq_host,
 			 id_host, data_len, burst, verbose, 0 /* is_ip6 */ );
 }
 
-static void
-print_ip46_icmp_reply (vlib_main_t * vm, u32 bi0, int is_ip6)
-{
-  vlib_buffer_t *b0 = vlib_get_buffer (vm, bi0);
-  int l4_offset;
-  void *paddr;
-  void *format_addr_func;
-  u16 payload_length;
-  u8 ttl;
-  if (is_ip6)
-    {
-      ip6_header_t *ip6 = vlib_buffer_get_current (b0);
-      paddr = (void *) &ip6->src_address;
-      format_addr_func = (void *) format_ip6_address;
-      ttl = ip6->hop_limit;
-      l4_offset = sizeof (ip6_header_t);	// FIXME - EH processing ?
-      payload_length = clib_net_to_host_u16 (ip6->payload_length);
-    }
-  else
-    {
-      ip4_header_t *ip4 = vlib_buffer_get_current (b0);
-      paddr = (void *) &ip4->src_address;
-      format_addr_func = (void *) format_ip4_address;
-      ttl = ip4->ttl;
-      l4_offset = ip4_header_bytes (ip4);
-      payload_length =
-	clib_net_to_host_u16 (ip4->length) + ip4_header_bytes (ip4);
-    }
-  icmp46_header_t *icmp = vlib_buffer_get_current (b0) + l4_offset;
-  icmp46_echo_request_t *icmp_echo = (icmp46_echo_request_t *) (icmp + 1);
-  u64 *dataplane_ts = (u64 *) & vnet_buffer (b0)->unused[0];
+// static void
+// print_ip46_icmp_reply (vlib_main_t * vm, u32 bi0, int is_ip6)
+// {
+//   vlib_buffer_t *b0 = vlib_get_buffer (vm, bi0);
+//   int l4_offset;
+//   void *paddr;
+//   void *format_addr_func;
+//   u16 payload_length;
+//   u8 ttl;
+//   if (is_ip6)
+//     {
+//       ip6_header_t *ip6 = vlib_buffer_get_current (b0);
+//       paddr = (void *) &ip6->src_address;
+//       format_addr_func = (void *) format_ip6_address;
+//       ttl = ip6->hop_limit;
+//       l4_offset = sizeof (ip6_header_t);	// FIXME - EH processing ?
+//       payload_length = clib_net_to_host_u16 (ip6->payload_length);
+//     }
+//   else
+//     {
+//       ip4_header_t *ip4 = vlib_buffer_get_current (b0);
+//       paddr = (void *) &ip4->src_address;
+//       format_addr_func = (void *) format_ip4_address;
+//       ttl = ip4->ttl;
+//       l4_offset = ip4_header_bytes (ip4);
+//       payload_length =
+// 	clib_net_to_host_u16 (ip4->length) + ip4_header_bytes (ip4);
+//     }
+//   icmp46_header_t *icmp = vlib_buffer_get_current (b0) + l4_offset;
+//   icmp46_echo_request_t *icmp_echo = (icmp46_echo_request_t *) (icmp + 1);
+//   u64 *dataplane_ts = (u64 *) & vnet_buffer (b0)->unused[0];
 
-  f64 clocks_per_second = ((f64) vm->clib_time.clocks_per_second);
-  f64 rtt =
-    ((f64) (*dataplane_ts - icmp_echo->time_sent)) / clocks_per_second;
+//   f64 clocks_per_second = ((f64) vm->clib_time.clocks_per_second);
+//   f64 rtt =
+//     ((f64) (*dataplane_ts - icmp_echo->time_sent)) / clocks_per_second;
 
-  vlib_cli_output (vm,
-		   "%d bytes from %U: icmp_seq=%d ttl=%d time=%.4f ms",
-		   payload_length,
-		   format_addr_func,
-		   paddr,
-		   clib_host_to_net_u16 (icmp_echo->seq), ttl, rtt * 1000.0);
-}
+//   vlib_cli_output (vm,
+// 		   "%d bytes from %U: icmp_seq=%d ttl=%d time=%.4f ms",
+// 		   payload_length,
+// 		   format_addr_func,
+// 		   paddr,
+// 		   clib_host_to_net_u16 (icmp_echo->seq), ttl, rtt * 1000.0);
+// }
 
 /*
  * Perform the ping run with the given parameters in the current CLI process.
@@ -1240,7 +1304,7 @@ print_ip46_icmp_reply (vlib_main_t * vm, u32 bi0, int is_ip6)
 
 static void
 run_ping_ip46_address (vlib_main_t * vm, u32 table_id, ip4_address_t * pa4,
-		       ip6_address_t * pa6, u32 sw_if_index,
+		       ip6_address_t * pa6, u32 sw_if_index, u32 dst_sw_if_index,
 		       f64 ping_interval, u32 ping_repeat, u32 data_len,
 		       u32 ping_burst, u32 verbose)
 {
@@ -1268,8 +1332,8 @@ run_ping_ip46_address (vlib_main_t * vm, u32 table_id, ip4_address_t * pa4,
   for (i = 1; i <= ping_repeat; i++)
     {
       send_ip46_ping_result_t res = SEND_PING_OK;
-      f64 sleep_interval;
-      f64 time_ping_sent = vlib_time_now (vm);
+      // f64 sleep_interval;
+      // f64 time_ping_sent = vlib_time_now (vm);
       if (pa6)
 	{
 	  res = send_ip6_ping (vm, table_id,
@@ -1283,54 +1347,65 @@ run_ping_ip46_address (vlib_main_t * vm, u32 table_id, ip4_address_t * pa4,
       if (pa4)
 	{
 	  res = send_ip4_ping (vm, table_id, pa4,
-			       sw_if_index, i, icmp_id, data_len,
+			       sw_if_index, dst_sw_if_index, i, icmp_id, data_len,
 			       ping_burst, verbose);
 	  if (SEND_PING_OK == res)
 	    n_requests += ping_burst;
 	  else
 	    vlib_cli_output (vm, "Failed: %U", format_ip46_ping_result, res);
 	}
+  //  while (i <= ping_repeat)
+  //  {
+      u32 sw_if_index0 = 5;
+      l2input_main_t *msm = &l2input_main;
+      l2_input_config_t *config = vec_elt_at_index (msm->configs, sw_if_index0);
+      // config->bypass_time;
+      printf("lbinxx config->bypass_time = %ld\n",config->bypass_time);
+      // goto double_break;
+
+  //  }
+
 
       /* Collect and print the responses until it is time to send a next ping */
 
-      while ((i <= ping_repeat)
-	     &&
-	     ((sleep_interval =
-	       time_ping_sent + ping_interval - vlib_time_now (vm)) > 0.0))
-	{
-	  uword event_type, *event_data = 0;
-	  vlib_process_wait_for_event_or_clock (vm, sleep_interval);
-	  event_type = vlib_process_get_events (vm, &event_data);
-	  switch (event_type)
-	    {
-	    case ~0:		/* no events => timeout */
-	      break;
-	    case PING_RESPONSE_IP6:
-	      /* fall-through */
-	    case PING_RESPONSE_IP4:
-	      {
-		int ii;
-		int is_ip6 = (event_type == PING_RESPONSE_IP6);
-		for (ii = 0; ii < vec_len (event_data); ii++)
-		  {
-		    u32 bi0 = event_data[ii];
-		    print_ip46_icmp_reply (vm, bi0, is_ip6);
-		    n_replies++;
-		    if (0 != bi0)
-		      vlib_buffer_free (vm, &bi0, 1);
-		  }
-	      }
-	      break;
-	    case UNIX_CLI_PROCESS_EVENT_READ_READY:
-	    case UNIX_CLI_PROCESS_EVENT_QUIT:
-	      /* someone pressed a key, abort */
-	      vlib_cli_output (vm, "Aborted due to a keypress.");
-	      goto double_break;
-	    }
-	  vec_free (event_data);
-	}
+  //     while ((i <= ping_repeat)
+	//      &&
+	//      ((sleep_interval =
+	//        time_ping_sent + ping_interval - vlib_time_now (vm)) > 0.0))
+	// {
+	//   uword event_type, *event_data = 0;
+	//   vlib_process_wait_for_event_or_clock (vm, sleep_interval);
+	//   event_type = vlib_process_get_events (vm, &event_data);
+	//   switch (event_type)
+	//     {
+	//     case ~0:		/* no events => timeout */
+	//       break;
+	//     case PING_RESPONSE_IP6:
+	//       /* fall-through */
+	//     case PING_RESPONSE_IP4:
+	//       {
+	// 	int ii;
+	// 	int is_ip6 = (event_type == PING_RESPONSE_IP6);
+	// 	for (ii = 0; ii < vec_len (event_data); ii++)
+	// 	  {
+	// 	    u32 bi0 = event_data[ii];
+	// 	    print_ip46_icmp_reply (vm, bi0, is_ip6);
+	// 	    n_replies++;
+	// 	    if (0 != bi0)
+	// 	      vlib_buffer_free (vm, &bi0, 1);
+	// 	  }
+	//       }
+	//       break;
+	//     case UNIX_CLI_PROCESS_EVENT_READ_READY:
+	//     case UNIX_CLI_PROCESS_EVENT_QUIT:
+	//       /* someone pressed a key, abort */
+	//       vlib_cli_output (vm, "Aborted due to a keypress.");
+	//       goto double_break;
+	//     }
+	//   vec_free (event_data);
+	// }
     }
-double_break:
+// double_break:
   vlib_cli_output (vm, "\n");
   {
     float loss =
@@ -1361,10 +1436,12 @@ ping_ip_address (vlib_main_t * vm,
   u32 verbose = 0;
   f64 ping_interval = PING_DEFAULT_INTERVAL;
   u32 sw_if_index, table_id;
+  u32 dst_sw_if_index;
 
   table_id = 0;
   ping_ip4 = ping_ip6 = 0;
   sw_if_index = ~0;
+  dst_sw_if_index = ~0;
 
   if (unformat (input, "%U", unformat_ip4_address, &a4))
     {
@@ -1434,6 +1511,18 @@ ping_ip_address (vlib_main_t * vm,
 	{
 	  if (!unformat_user
 	      (input, unformat_vnet_sw_interface, vnm, &sw_if_index))
+	    {
+	      error =
+		clib_error_return (0,
+				   "unknown interface `%U'",
+				   format_unformat_error, input);
+	      goto done;
+	    }
+	}
+        else if (unformat (input, "dst"))
+	{
+	  if (!unformat_user
+	      (input, unformat_vnet_sw_interface, vnm, &dst_sw_if_index))
 	    {
 	      error =
 		clib_error_return (0,
@@ -1533,7 +1622,7 @@ ping_ip_address (vlib_main_t * vm,
 			      MAX_PING_BURST);
 
   run_ping_ip46_address (vm, table_id, ping_ip4 ? &a4 : NULL,
-			 ping_ip6 ? &a6 : NULL, sw_if_index, ping_interval,
+			 ping_ip6 ? &a6 : NULL, sw_if_index, dst_sw_if_index, ping_interval,
 			 ping_repeat, data_len, ping_burst, verbose);
 done:
   return error;
@@ -1586,7 +1675,7 @@ VLIB_CLI_COMMAND (ping_command, static) =
   .path = "ping",
   .function = ping_ip_address,
   .short_help = "ping {<ip-addr> | ipv4 <ip4-addr> | ipv6 <ip6-addr>}"
-  " [ipv4 <ip4-addr> | ipv6 <ip6-addr>] [source <interface>]"
+  " [ipv4 <ip4-addr> | ipv6 <ip6-addr>] [source <interface>] [dst <interface>]"
   " [size <pktsize:60>] [interval <sec:1>] [repeat <cnt:5>] [table-id <id:0>]"
   " [burst <count:1>] [verbose]",
   .is_mp_safe = 1,

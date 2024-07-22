@@ -631,6 +631,19 @@ acl_fa_prefetch_session_data_for_hash (acl_main_t * am, int is_ip6, u64 hash)
     clib_bihash_prefetch_data_16_8 (&am->fa_ip4_sessions_hash, hash);
 }
 
+/**
+ * @brief Find session with given hash value in ACL Fast-Action module
+ *
+ * 此内联函数用于在ACL Fast-Action模块中，基于给定的哈希值查找对应的会话信息。
+ *
+ * @param am 指向ACL主控结构的指针
+ * @param is_ip6 是否为IPv6数据包的标志
+ * @param sw_if_index0 软件接口索引
+ * @param hash 会话哈希值
+ * @param p5tuple 指向FA五元组结构的指针
+ * @param pvalue_sess 指向u64类型的指针，用于存储找到的会话值
+ * @return 返回查找结果，非零表示未找到，零表示找到
+ */
 always_inline int
 acl_fa_find_session_with_hash (acl_main_t * am, int is_ip6, u32 sw_if_index0,
 			       u64 hash, fa_5tuple_t * p5tuple,

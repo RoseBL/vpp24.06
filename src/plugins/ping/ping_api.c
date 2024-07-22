@@ -108,7 +108,7 @@ vl_api_want_ping_finished_events_t_handler (
       f64 time_ping_sent = vlib_time_now (vm);
 
       if (dst_addr.version == AF_IP4)
-	res = send_ip4_ping (vm, table_id, &dst_addr.ip.ip4, sw_if_index, i,
+	res = send_ip4_ping (vm, table_id, &dst_addr.ip.ip4, sw_if_index, sw_if_index, i,
 			     icmp_id, data_len, ping_burst, verbose);
       else
 	res = send_ip6_ping (vm, table_id, &dst_addr.ip.ip6, sw_if_index, i,

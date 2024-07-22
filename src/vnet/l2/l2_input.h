@@ -74,11 +74,13 @@ typedef struct
 
   /* A wee bit of spare space */
   u8 __pad;
+
+  u64 bypass_time;
 } l2_input_config_t;
 
 /* Ensure a struct is an even multiple of 8 bytes,
  * so they do not stradle cache lines */
-STATIC_ASSERT_SIZEOF (l2_input_config_t, 2 * sizeof (u64));
+STATIC_ASSERT_SIZEOF (l2_input_config_t, 3 * sizeof (u64));
 
 typedef struct
 {
